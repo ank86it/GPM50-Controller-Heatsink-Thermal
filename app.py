@@ -92,12 +92,17 @@ def create_heatmap_image(load, eff_m, eff_c, v, target_margin):
             val = df.iloc[i,j]
             color.iloc[i,j] = 2 if val > target_margin+10 else 1 if val > target_margin else 0
 
-    ax.imshow(color, cmap=ListedColormap(["red","yellow","green"]))
+    cmap = ListedColormap(["red","yellow","green"])
+    ax.imshow(color, cmap=cmap)
 
     ax.set_xticks(range(len(fins)))
     ax.set_yticks(range(len(amb)))
     ax.set_xticklabels([f"{f}%" for f in fins])
     ax.set_yticklabels([f"{t}°C" for t in amb])
+
+    for i in range(len(amb)):
+        for j in range(len(fins)):
+            ax.text(j,i,f"{df.iloc[i,j]:.1f}%",ha='center', fontsize=8)
 
     plt.savefig("heatmap.png")
     plt.close()
@@ -111,18 +116,55 @@ def generate_pdf(results, inputs, load, eff_m, eff_c, v, target_margin):
     styles = getSampleStyleSheet()
     story = []
 
+    # TITLE
     story.append(Paragraph("Thermal Design Report", styles['Title']))
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 15))
 
+    # INPUTS
+    story.append(Paragraph("Inputs:", styles['Heading2']))
+    story.append(Spacer(1, 5))
     for k, v_ in inputs.items():
         story.append(Paragraph(f"{k}: {v_}", styles['Normal']))
 
+    story.append(Spacer(1, 10))
+
+    # RESULTS
     if "calc" in results:
         tj, margin = results["calc"]
+        story.append(Paragraph("Results:", styles['Heading2']))
+        story.append(Spacer(1, 5))
         story.append(Paragraph(f"Tj: {tj:.2f} °C", styles['Normal']))
         story.append(Paragraph(f"Margin: {margin:.1f} %", styles['Normal']))
 
+    story.append(Spacer(1, 10))
+
+    # OPTIMIZERS
+    story.append(Paragraph("Optimizers:", styles['Heading2']))
+    story.append(Spacer(1, 5))
+
+    if "max_load" in results:
+        story.append(Paragraph(f"Max Load: {results['max_load']:.0f} W", styles['Normal']))
+    if "min_fin" in results:
+        story.append(Paragraph(f"Min Fin: {results['min_fin']:.1f} %", styles['Normal']))
+    if "max_Ta" in results:
+        story.append(Paragraph(f"Max Ambient: {results['max_Ta']:.1f} °C", styles['Normal']))
+
+    story.append(Spacer(1, 15))
+
+    # HEATMAP
+    story.append(Paragraph("Margin Heatmap:", styles['Heading2']))
+    story.append(Spacer(1, 10))
     story.append(Image("heatmap.png", width=400, height=300))
+
+    story.append(Spacer(1, 10))
+
+    # LEGEND
+    story.append(Paragraph("Legend:", styles['Heading3']))
+    story.append(Spacer(1, 5))
+    story.append(Paragraph("🟩 Over Design (> target + 10%)", styles['Normal']))
+    story.append(Paragraph("🟨 Safe Design (> target margin)", styles['Normal']))
+    story.append(Paragraph("🟥 Poor Design (< target margin)", styles['Normal']))
+
     doc.build(story)
 
 # =========================
@@ -175,7 +217,7 @@ if "calc" in st.session_state.results:
     st.write(f"Margin: {margin:.1f}%")
 
 # =========================
-# HEATMAP (FIXED SIZE + LEGEND)
+# HEATMAP (FIXED)
 # =========================
 if "calc" in st.session_state.results:
 
