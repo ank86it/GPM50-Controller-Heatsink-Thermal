@@ -13,7 +13,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="GPM50 Controller Heatsink Thermal Design Tool")
 
-# ---------------- HIDE UI ----------------
+# ---------------- HIDE UI + SHARE BUTTON ----------------
 st.markdown("""
 <style>
 #MainMenu {visibility: hidden;}
@@ -21,7 +21,28 @@ footer {visibility: hidden;}
 header {visibility: hidden;}
 div[data-testid="stToolbar"] {display: none;}
 .block-container {max-width: 900px;}
+
+.share-btn {
+    position: fixed;
+    top: 10px;
+    right: 20px;
+    z-index: 1000;
+}
+.share-btn a {
+    background-color: #4CAF50;
+    color: white;
+    padding: 8px 14px;
+    text-decoration: none;
+    border-radius: 6px;
+    font-size: 14px;
+}
 </style>
+
+<div class="share-btn">
+    <a href="mailto:?subject=Thermal Tool&body=Check this tool: https://your-app-url.streamlit.app">
+        🔗 Share
+    </a>
+</div>
 """, unsafe_allow_html=True)
 
 # ---------------- LOAD MODEL ----------------
