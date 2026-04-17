@@ -13,7 +13,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="GPM50 Controller Heatsink Thermal Design Tool")
 
-# ---------------- HIDE UI + SHARE ----------------
+# ---------------- HIDE UI ----------------
 st.markdown("""
 <style>
 #MainMenu {visibility: hidden;}
@@ -21,38 +21,22 @@ footer {visibility: hidden;}
 header {visibility: hidden;}
 div[data-testid="stToolbar"] {display: none;}
 .block-container {max-width: 900px;}
-
-.share-box {
-    position: fixed;
-    top: 10px;
-    right: 20px;
-    z-index: 1000;
-    display: flex;
-    gap: 6px;
-}
-.share-btn {
-    background-color: #4CAF50;
-    color: white;
-    padding: 6px 10px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 13px;
-    border: none;
-}
 </style>
-
-<div class="share-box">
-    <button class="share-btn" onclick="copyLink()">🔗 Copy Link</button>
-    <a class="share-btn" href="https://wa.me/?text=Check this thermal tool: https://your-app-url.streamlit.app" target="_blank">📱 WhatsApp</a>
-</div>
-
-<script>
-function copyLink() {
-    navigator.clipboard.writeText("https://your-app-url.streamlit.app");
-    alert("Link copied!");
-}
-</script>
 """, unsafe_allow_html=True)
+
+# ---------------- SHARE (WORKING VERSION) ----------------
+APP_URL = "https://your-app-url.streamlit.app"  # 🔁 replace this
+
+with st.container():
+    col1, col2 = st.columns([6,1])
+
+    with col2:
+        if st.button("🔗 Copy"):
+            st.toast("Link ready below 👇")
+            st.session_state["copy_link"] = True
+
+    if st.session_state.get("copy_link", False):
+        st.text_input("App Link", APP_URL)
 
 # ---------------- LOAD MODEL ----------------
 ml_model = joblib.load("xgb_thermal_model.pkl")
@@ -282,12 +266,10 @@ if "calc" in st.session_state.results:
         for j in range(len(fins)):
             ax.text(j,i,f"{df.iloc[i,j]:.1f}%",ha='center', fontsize=8)
 
-    # DOT
     fin_idx = min(range(len(fins)), key=lambda i: abs(fins[i] - fin))
     amb_idx = min(range(len(amb)), key=lambda i: abs(amb[i] - Ta))
     ax.scatter(fin_idx, amb_idx, color='black', s=80, edgecolors='white', linewidth=1.5)
 
-    # SMART ARROW
     if margin < target_margin:
 
         best_move = None
@@ -296,13 +278,11 @@ if "calc" in st.session_state.results:
         if fin_idx < len(fins) - 1:
             m_right = df.iloc[amb_idx, fin_idx+1]
             if m_right > best_margin:
-                best_margin = m_right
                 best_move = "right"
 
         if amb_idx < len(amb) - 1:
             m_down = df.iloc[amb_idx+1, fin_idx]
             if m_down > best_margin:
-                best_margin = m_down
                 best_move = "down"
 
         if best_move == "right":
