@@ -41,7 +41,8 @@ def hybrid_predict(load, eff_m, eff_c, Ta, fin, v):
     tj_p = thermal_model(load, eff_m, eff_c, Ta, fin, v)
 
     inp = [[load, eff_m, eff_c, Ta, fin, v,
-            load*(1-eff_m), v*(1+fin/100),
+            load*(1-eff_m),
+            v*(1+fin/100),
             1/(v*(1+fin/100)+0.1)]]
 
     delta = ml_model.predict(inp)[0]
@@ -83,8 +84,8 @@ if st.button("Calculate"):
 # ---------------- HEATMAP ----------------
 if st.button("Show Margin Map"):
 
-    amb = [50,40,35,30,25]
-    fins = [-20,-10,0,10,20]
+    amb = [50, 40, 35, 30, 25]
+    fins = [-20, -10, 0, 10, 20]
 
     data = []
     for T in amb:
@@ -113,6 +114,9 @@ if st.button("Show Margin Map"):
     ax.set_xticklabels([f"{f}%" for f in fins])
     ax.set_yticklabels([f"{t}°C" for t in amb])
 
+    ax.set_xlabel("Fin Area Change (%)")
+    ax.set_ylabel("Ambient Temperature (°C)")
+
     for i in range(len(amb)):
         for j in range(len(fins)):
             ax.text(j,i,f"{df.iloc[i,j]:.1f}%",ha='center')
@@ -133,10 +137,9 @@ st.header("🟢 Design Optimizers (10% Margin Target)")
 
 # 1️⃣ MAX LOAD
 if st.button("Find Max Load"):
-
     max_load = None
 
-    for L in np.linspace(1000, 15000, 100):
+    for L in np.linspace(1000, 15000, 120):
         tj = hybrid_predict(L, eff_m, eff_c, Ta, fin, v)
 
         if calc_margin(tj) >= 10:
@@ -144,11 +147,10 @@ if st.button("Find Max Load"):
         else:
             break
 
-    st.write(f"Max Load: {max_load:.0f} W")
+    st.write(f"Max Load Allowed: {max_load:.0f} W")
 
 # 2️⃣ MIN FIN
 if st.button("Find Minimum Fin"):
-
     best_fin = None
 
     for f in np.linspace(-20, 50, 120):
@@ -162,7 +164,6 @@ if st.button("Find Minimum Fin"):
 
 # 3️⃣ MAX AMBIENT
 if st.button("Find Max Ambient Temperature"):
-
     max_Ta = None
 
     for T in np.linspace(20, 80, 120):
@@ -173,4 +174,15 @@ if st.button("Find Max Ambient Temperature"):
         else:
             break
 
-    st.write(f"Max Ambient: {max_Ta:.1f} °C")
+    st.write(f"Max Ambient Temperature: {max_Ta:.1f} °C")
+
+# =========================
+# 📷 IMAGE SECTION
+# =========================
+st.markdown("---")
+st.subheader("📷 Controller Heatsink Design")
+
+try:
+    st.image("Controller Heatsink2.png", use_container_width=True)
+except:
+    st.warning("Image not found. Check file name.")
