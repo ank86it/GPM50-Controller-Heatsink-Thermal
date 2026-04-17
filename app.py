@@ -213,7 +213,7 @@ if "calc" in st.session_state.results:
         st.success("🟩 Safe Design (Above Target)")
 
 # =========================
-# HEATMAP (FINAL FIXED)
+# HEATMAP (WITH DOT MARKER)
 # =========================
 if "calc" in st.session_state.results:
 
@@ -252,6 +252,11 @@ if "calc" in st.session_state.results:
     for i in range(len(amb)):
         for j in range(len(fins)):
             ax.text(j,i,f"{df.iloc[i,j]:.1f}%",ha='center', fontsize=8)
+
+    # ✅ DOT MARKER (ONLY NEW ADDITION)
+    fin_idx = min(range(len(fins)), key=lambda i: abs(fins[i] - fin))
+    amb_idx = min(range(len(amb)), key=lambda i: abs(amb[i] - Ta))
+    ax.scatter(fin_idx, amb_idx, color='black', s=80, edgecolors='white', linewidth=1.5)
 
     legend = [
         mpatches.Patch(color='green', label='Over Design'),
