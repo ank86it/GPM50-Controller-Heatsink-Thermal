@@ -44,6 +44,7 @@ def thermal_model(load, eff_m, eff_c, Ta, fin, v):
     loss = controller_input - motor_input
 
     A_bc, A_bf = 0.0386, 0.0573
+
     h_bf = interpolate_h(v, [2,5,10], [11,18,23])
     h_bc = interpolate_h(v, [2,5,10], [13,18,21])
 
@@ -81,6 +82,9 @@ Ta = st.number_input("Ambient Temp (°C)", value=40.0)
 fin = st.number_input("Fin Change (%)", value=0.0)
 v = st.number_input("Air Velocity (m/s)", value=5.0)
 
+# ✅ NEW INPUT
+target_margin = st.number_input("Safety Margin Target (%)", value=10.0)
+
 # =========================
 # 🔄 UPDATE ALL BUTTON
 # =========================
@@ -96,8 +100,8 @@ if st.button("🔄 Update All Results"):
     # ---- HEATMAP ----
     amb = [50,40,35,30,25]
     fins = [-20,-10,0,10,20]
-    data = []
 
+    data = []
     for T in amb:
         row = []
         for f in fins:
@@ -109,19 +113,19 @@ if st.button("🔄 Update All Results"):
 
     # ---- MAX LOAD ----
     for L in np.linspace(1000,15000,120):
-        if calc_margin(hybrid_predict(L, eff_m, eff_c, Ta, fin, v)) < 10:
+        if calc_margin(hybrid_predict(L, eff_m, eff_c, Ta, fin, v)) < target_margin:
             results["max_load"] = L-100
             break
 
     # ---- MIN FIN ----
     for f in np.linspace(-20,50,120):
-        if calc_margin(hybrid_predict(load, eff_m, eff_c, Ta, f, v)) >= 10:
+        if calc_margin(hybrid_predict(load, eff_m, eff_c, Ta, f, v)) >= target_margin:
             results["min_fin"] = f
             break
 
     # ---- MAX AMBIENT ----
     for T in np.linspace(20,80,120):
-        if calc_margin(hybrid_predict(load, eff_m, eff_c, T, fin, v)) < 10:
+        if calc_margin(hybrid_predict(load, eff_m, eff_c, T, fin, v)) < target_margin:
             results["max_Ta"] = T-0.5
             break
 
@@ -136,13 +140,14 @@ if "calc" in st.session_state.results:
     st.subheader("Results")
     st.write(f"Tj: {tj:.2f} °C")
     st.write(f"Margin: {margin:.1f} %")
+    st.write(f"Target Margin: {target_margin:.1f} %")
 
-    if margin < 10:
-        st.error("❌ Poor Design")
-    elif margin < 20:
-        st.warning("⚠️ Safe Design")
+    if margin < target_margin:
+        st.error("❌ Below Target")
+    elif margin < target_margin + 10:
+        st.warning("⚠️ Near Target")
     else:
-        st.success("🟩 Over Design")
+        st.success("🟩 Safe Design")
 
 # =========================
 # 📊 HEATMAP
@@ -158,11 +163,13 @@ if "heatmap" in st.session_state.results:
     for i in range(len(df.index)):
         for j in range(len(df.columns)):
             val = df.iloc[i,j]
-            color.iloc[i,j] = 2 if val>20 else 1 if val>10 else 0
+            color.iloc[i,j] = 2 if val > target_margin+10 else 1 if val > target_margin else 0
 
     ax.imshow(color, cmap=ListedColormap(["red","yellow","green"]))
+
     ax.set_xticks(range(len(fins)))
     ax.set_yticks(range(len(amb)))
+
     ax.set_xticklabels([f"{f}%" for f in fins])
     ax.set_yticklabels([f"{t}°C" for t in amb])
 
@@ -173,9 +180,9 @@ if "heatmap" in st.session_state.results:
     st.pyplot(fig)
 
 # =========================
-# 🟢 OPTIMIZER RESULTS
+# 🟢 OPTIMIZERS
 # =========================
-st.header("🟢 Design Optimizers")
+st.header(f"🟢 Design Optimizers (Target Margin: {target_margin:.1f}%)")
 
 if "max_load" in st.session_state.results:
     st.write(f"Max Load: {st.session_state.results['max_load']:.0f} W")
