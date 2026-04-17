@@ -95,6 +95,11 @@ def create_heatmap_image(load, eff_m, eff_c, v, target_margin):
     cmap = ListedColormap(["red","yellow","green"])
     ax.imshow(color, cmap=cmap)
 
+    ax.set_xticks(range(len(fins)))
+    ax.set_yticks(range(len(amb)))
+    ax.set_xticklabels([f"{f}%" for f in fins])
+    ax.set_yticklabels([f"{t}°C" for t in amb])
+
     for i in range(len(amb)):
         for j in range(len(fins)):
             ax.text(j,i,f"{df.iloc[i,j]:.1f}%",ha='center', fontsize=8)
@@ -200,7 +205,6 @@ if "calc" in st.session_state.results:
     st.write(f"Tj: {tj:.2f} °C")
     st.write(f"Margin: {margin:.1f}%")
 
-    # STATUS
     if margin < target_margin:
         st.error("❌ Below Target Margin")
     elif margin < target_margin + 10:
@@ -209,7 +213,7 @@ if "calc" in st.session_state.results:
         st.success("🟩 Safe Design (Above Target)")
 
 # =========================
-# HEATMAP
+# HEATMAP (FINAL FIXED)
 # =========================
 if "calc" in st.session_state.results:
 
@@ -236,6 +240,14 @@ if "calc" in st.session_state.results:
 
     cmap = ListedColormap(["red","yellow","green"])
     ax.imshow(color, cmap=cmap)
+
+    ax.set_xticks(range(len(fins)))
+    ax.set_yticks(range(len(amb)))
+    ax.set_xticklabels([f"{f}%" for f in fins])
+    ax.set_yticklabels([f"{t}°C" for t in amb])
+
+    ax.set_xlabel("Fin Area Change (%)")
+    ax.set_ylabel("Ambient Temperature (°C)")
 
     for i in range(len(amb)):
         for j in range(len(fins)):
