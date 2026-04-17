@@ -142,7 +142,6 @@ def generate_pdf(results, inputs, load, eff_m, eff_c, v, target_margin):
         story.append(Paragraph(f"Max Ambient: {results['max_Ta']:.1f} °C", styles['Normal']))
 
     story.append(Spacer(1, 15))
-
     story.append(Paragraph("Margin Heatmap:", styles['Heading2']))
     story.append(Image("heatmap.png", width=400, height=300))
 
@@ -213,7 +212,7 @@ if "calc" in st.session_state.results:
         st.success("🟩 Safe Design (Above Target)")
 
 # =========================
-# HEATMAP (WITH DOT MARKER)
+# HEATMAP (WITH DOT + ARROWS)
 # =========================
 if "calc" in st.session_state.results:
 
@@ -253,10 +252,22 @@ if "calc" in st.session_state.results:
         for j in range(len(fins)):
             ax.text(j,i,f"{df.iloc[i,j]:.1f}%",ha='center', fontsize=8)
 
-    # ✅ DOT MARKER (ONLY NEW ADDITION)
+    # DOT
     fin_idx = min(range(len(fins)), key=lambda i: abs(fins[i] - fin))
     amb_idx = min(range(len(amb)), key=lambda i: abs(amb[i] - Ta))
     ax.scatter(fin_idx, amb_idx, color='black', s=80, edgecolors='white', linewidth=1.5)
+
+    # ➡️ Arrow (increase fin)
+    if fin_idx < len(fins) - 1:
+        ax.arrow(fin_idx, amb_idx, 0.6, 0,
+                 head_width=0.2, head_length=0.2,
+                 fc='black', ec='black')
+
+    # ⬇️ Arrow (reduce ambient)
+    if amb_idx < len(amb) - 1:
+        ax.arrow(fin_idx, amb_idx, 0, 0.6,
+                 head_width=0.2, head_length=0.2,
+                 fc='black', ec='black')
 
     legend = [
         mpatches.Patch(color='green', label='Over Design'),
