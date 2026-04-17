@@ -6,69 +6,30 @@ import matplotlib.patches as mpatches
 import joblib
 import numpy as np
 
-# ✅ PDF LIB
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+# PDF
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Thermal Design Tool")
 
-# ---------------- HIDE STREAMLIT UI ----------------
+# ---------------- HIDE UI ----------------
 st.markdown("""
 <style>
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
 div[data-testid="stToolbar"] {display: none;}
-
-.block-container {
-    max-width: 900px;
-    padding-top: 2rem;
-}
+.block-container {max-width: 900px;}
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------- LOAD MODEL ----------------
 ml_model = joblib.load("xgb_thermal_model.pkl")
 
-# ---------------- SESSION STATE ----------------
+# ---------------- SESSION ----------------
 if "results" not in st.session_state:
     st.session_state.results = {}
-
-# ---------------- PDF FUNCTION ----------------
-def generate_pdf(results, inputs, filename="thermal_report.pdf"):
-    doc = SimpleDocTemplate(filename)
-    styles = getSampleStyleSheet()
-    story = []
-
-    story.append(Paragraph("Thermal Design Report", styles['Title']))
-    story.append(Spacer(1, 10))
-
-    story.append(Paragraph("Inputs:", styles['Heading2']))
-    for key, val in inputs.items():
-        story.append(Paragraph(f"{key}: {val}", styles['Normal']))
-
-    story.append(Spacer(1, 10))
-
-    if "calc" in results:
-        tj, margin = results["calc"]
-        story.append(Paragraph("Results:", styles['Heading2']))
-        story.append(Paragraph(f"Tj: {tj:.2f} °C", styles['Normal']))
-        story.append(Paragraph(f"Margin: {margin:.1f} %", styles['Normal']))
-
-    story.append(Spacer(1, 10))
-    story.append(Paragraph("Optimizers:", styles['Heading2']))
-
-    if "max_load" in results:
-        story.append(Paragraph(f"Max Load: {results['max_load']:.0f} W", styles['Normal']))
-
-    if "min_fin" in results:
-        story.append(Paragraph(f"Min Fin: {results['min_fin']:.1f} %", styles['Normal']))
-
-    if "max_Ta" in results:
-        story.append(Paragraph(f"Max Ambient: {results['max_Ta']:.1f} °C", styles['Normal']))
-
-    doc.build(story)
 
 # ---------------- PHYSICS ----------------
 def interpolate_h(v, v_points, h_points):
@@ -107,11 +68,87 @@ def hybrid_predict(load, eff_m, eff_c, Ta, fin, v):
 def calc_margin(tj):
     return ((125 - tj) / 125) * 100
 
+# ---------------- HEATMAP IMAGE ----------------
+def create_heatmap_image(load, eff_m, eff_c, v):
+
+    amb = [50,40,35,30,25]
+    fins = [-20,-10,0,10,20]
+
+    data = []
+    for T in amb:
+        row = []
+        for f in fins:
+            tj = hybrid_predict(load, eff_m, eff_c, T, f, v)
+            row.append(calc_margin(tj))
+        data.append(row)
+
+    df = pd.DataFrame(data, index=amb, columns=fins)
+
+    fig, ax = plt.subplots()
+
+    color = df.copy()
+    for i in range(len(df.index)):
+        for j in range(len(df.columns)):
+            val = df.iloc[i,j]
+            color.iloc[i,j] = 2 if val > 20 else 1 if val > 10 else 0
+
+    ax.imshow(color, cmap=ListedColormap(["red","yellow","green"]))
+
+    ax.set_xticks(range(len(fins)))
+    ax.set_yticks(range(len(amb)))
+    ax.set_xticklabels([f"{f}%" for f in fins])
+    ax.set_yticklabels([f"{t}°C" for t in amb])
+
+    for i in range(len(amb)):
+        for j in range(len(fins)):
+            ax.text(j,i,f"{df.iloc[i,j]:.1f}%",ha='center')
+
+    plt.savefig("heatmap.png")
+    plt.close()
+
+# ---------------- PDF ----------------
+def generate_pdf(results, inputs, load, eff_m, eff_c, v):
+
+    create_heatmap_image(load, eff_m, eff_c, v)
+
+    doc = SimpleDocTemplate("thermal_report.pdf")
+    styles = getSampleStyleSheet()
+    story = []
+
+    story.append(Paragraph("Thermal Design Report", styles['Title']))
+    story.append(Spacer(1, 10))
+
+    story.append(Paragraph("Inputs:", styles['Heading2']))
+    for k, v_ in inputs.items():
+        story.append(Paragraph(f"{k}: {v_}", styles['Normal']))
+
+    story.append(Spacer(1, 10))
+
+    if "calc" in results:
+        tj, margin = results["calc"]
+        story.append(Paragraph(f"Tj: {tj:.2f} °C", styles['Normal']))
+        story.append(Paragraph(f"Margin: {margin:.1f} %", styles['Normal']))
+
+    story.append(Spacer(1, 10))
+    story.append(Paragraph("Optimizers:", styles['Heading2']))
+
+    if "max_load" in results:
+        story.append(Paragraph(f"Max Load: {results['max_load']:.0f} W", styles['Normal']))
+    if "min_fin" in results:
+        story.append(Paragraph(f"Min Fin: {results['min_fin']:.1f} %", styles['Normal']))
+    if "max_Ta" in results:
+        story.append(Paragraph(f"Max Ambient: {results['max_Ta']:.1f} °C", styles['Normal']))
+
+    story.append(Spacer(1, 20))
+    story.append(Paragraph("Margin Heatmap:", styles['Heading2']))
+    story.append(Image("heatmap.png", width=400, height=300))
+
+    doc.build(story)
+
 # =========================
-# 🔵 INPUT SECTION
+# 🔵 INPUT
 # =========================
 st.title("🔥 Thermal Design Tool")
-st.header("🔵 Design Evaluation")
 
 load = st.number_input("Load (W)", value=6000.0)
 eff_m = st.number_input("Motor Efficiency", value=0.9000, format="%.4f")
@@ -123,60 +160,57 @@ v = st.number_input("Air Velocity (m/s)", value=5.0)
 target_margin = st.number_input("Safety Margin Target (%)", value=10.0)
 
 # =========================
-# 🔄 UPDATE ALL BUTTON
+# 🔄 UPDATE ALL
 # =========================
 if st.button("🔄 Update All Results"):
 
-    results = {}
+    res = {}
 
     tj = hybrid_predict(load, eff_m, eff_c, Ta, fin, v)
-    margin = calc_margin(tj)
-    results["calc"] = (tj, margin)
+    res["calc"] = (tj, calc_margin(tj))
 
     for L in np.linspace(1000,15000,120):
         if calc_margin(hybrid_predict(L, eff_m, eff_c, Ta, fin, v)) < target_margin:
-            results["max_load"] = L-100
+            res["max_load"] = L-100
             break
 
     for f in np.linspace(-20,50,120):
         if calc_margin(hybrid_predict(load, eff_m, eff_c, Ta, f, v)) >= target_margin:
-            results["min_fin"] = f
+            res["min_fin"] = f
             break
 
     for T in np.linspace(20,80,120):
         if calc_margin(hybrid_predict(load, eff_m, eff_c, T, fin, v)) < target_margin:
-            results["max_Ta"] = T-0.5
+            res["max_Ta"] = T-0.5
             break
 
-    st.session_state.results = results
+    st.session_state.results = res
 
 # =========================
-# 🔵 DISPLAY RESULTS
+# RESULTS
 # =========================
 if "calc" in st.session_state.results:
     tj, margin = st.session_state.results["calc"]
 
-    st.subheader("Results")
     st.write(f"Tj: {tj:.2f} °C")
-    st.write(f"Margin: {margin:.1f} %")
-    st.write(f"Target Margin: {target_margin:.1f} %")
+    st.write(f"Margin: {margin:.1f}%")
 
 # =========================
-# 🟢 OPTIMIZERS
+# OPTIMIZERS
 # =========================
-st.header(f"🟢 Design Optimizers (Target Margin: {target_margin:.1f}%)")
+st.header(f"Optimizers (Target Margin: {target_margin:.1f}%)")
 
 if "max_load" in st.session_state.results:
     st.write(f"Max Load: {st.session_state.results['max_load']:.0f} W")
 
 if "min_fin" in st.session_state.results:
-    st.write(f"Minimum Fin: {st.session_state.results['min_fin']:.1f} %")
+    st.write(f"Min Fin: {st.session_state.results['min_fin']:.1f}%")
 
 if "max_Ta" in st.session_state.results:
     st.write(f"Max Ambient: {st.session_state.results['max_Ta']:.1f} °C")
 
 # =========================
-# 📄 PDF EXPORT
+# PDF
 # =========================
 if st.button("📄 Save Results to PDF"):
 
@@ -190,18 +224,13 @@ if st.button("📄 Save Results to PDF"):
         "Target Margin": target_margin
     }
 
-    generate_pdf(st.session_state.results, inputs)
+    generate_pdf(st.session_state.results, inputs, load, eff_m, eff_c, v)
 
     with open("thermal_report.pdf", "rb") as f:
-        st.download_button(
-            label="Download PDF",
-            data=f,
-            file_name="thermal_report.pdf",
-            mime="application/pdf"
-        )
+        st.download_button("Download PDF", f, "thermal_report.pdf")
 
 # =========================
-# 📷 IMAGE
+# IMAGE
 # =========================
 st.markdown("---")
 st.image("Controller Heatsink2.png", use_container_width=True)
