@@ -6,6 +6,10 @@ import matplotlib.patches as mpatches
 import joblib
 import numpy as np
 
+# ✅ PDF LIB
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="Thermal Design Tool")
 
@@ -31,6 +35,41 @@ ml_model = joblib.load("xgb_thermal_model.pkl")
 if "results" not in st.session_state:
     st.session_state.results = {}
 
+# ---------------- PDF FUNCTION ----------------
+def generate_pdf(results, inputs, filename="thermal_report.pdf"):
+    doc = SimpleDocTemplate(filename)
+    styles = getSampleStyleSheet()
+    story = []
+
+    story.append(Paragraph("Thermal Design Report", styles['Title']))
+    story.append(Spacer(1, 10))
+
+    story.append(Paragraph("Inputs:", styles['Heading2']))
+    for key, val in inputs.items():
+        story.append(Paragraph(f"{key}: {val}", styles['Normal']))
+
+    story.append(Spacer(1, 10))
+
+    if "calc" in results:
+        tj, margin = results["calc"]
+        story.append(Paragraph("Results:", styles['Heading2']))
+        story.append(Paragraph(f"Tj: {tj:.2f} °C", styles['Normal']))
+        story.append(Paragraph(f"Margin: {margin:.1f} %", styles['Normal']))
+
+    story.append(Spacer(1, 10))
+    story.append(Paragraph("Optimizers:", styles['Heading2']))
+
+    if "max_load" in results:
+        story.append(Paragraph(f"Max Load: {results['max_load']:.0f} W", styles['Normal']))
+
+    if "min_fin" in results:
+        story.append(Paragraph(f"Min Fin: {results['min_fin']:.1f} %", styles['Normal']))
+
+    if "max_Ta" in results:
+        story.append(Paragraph(f"Max Ambient: {results['max_Ta']:.1f} °C", styles['Normal']))
+
+    doc.build(story)
+
 # ---------------- PHYSICS ----------------
 def interpolate_h(v, v_points, h_points):
     for i in range(len(v_points)-1):
@@ -44,7 +83,6 @@ def thermal_model(load, eff_m, eff_c, Ta, fin, v):
     loss = controller_input - motor_input
 
     A_bc, A_bf = 0.0386, 0.0573
-
     h_bf = interpolate_h(v, [2,5,10], [11,18,23])
     h_bc = interpolate_h(v, [2,5,10], [13,18,21])
 
@@ -82,7 +120,6 @@ Ta = st.number_input("Ambient Temp (°C)", value=40.0)
 fin = st.number_input("Fin Change (%)", value=0.0)
 v = st.number_input("Air Velocity (m/s)", value=5.0)
 
-# ✅ NEW INPUT
 target_margin = st.number_input("Safety Margin Target (%)", value=10.0)
 
 # =========================
@@ -92,38 +129,20 @@ if st.button("🔄 Update All Results"):
 
     results = {}
 
-    # ---- MAIN RESULT ----
     tj = hybrid_predict(load, eff_m, eff_c, Ta, fin, v)
     margin = calc_margin(tj)
     results["calc"] = (tj, margin)
 
-    # ---- HEATMAP ----
-    amb = [50,40,35,30,25]
-    fins = [-20,-10,0,10,20]
-
-    data = []
-    for T in amb:
-        row = []
-        for f in fins:
-            tj_temp = hybrid_predict(load, eff_m, eff_c, T, f, v)
-            row.append(calc_margin(tj_temp))
-        data.append(row)
-
-    results["heatmap"] = (amb, fins, data)
-
-    # ---- MAX LOAD ----
     for L in np.linspace(1000,15000,120):
         if calc_margin(hybrid_predict(L, eff_m, eff_c, Ta, fin, v)) < target_margin:
             results["max_load"] = L-100
             break
 
-    # ---- MIN FIN ----
     for f in np.linspace(-20,50,120):
         if calc_margin(hybrid_predict(load, eff_m, eff_c, Ta, f, v)) >= target_margin:
             results["min_fin"] = f
             break
 
-    # ---- MAX AMBIENT ----
     for T in np.linspace(20,80,120):
         if calc_margin(hybrid_predict(load, eff_m, eff_c, T, fin, v)) < target_margin:
             results["max_Ta"] = T-0.5
@@ -142,43 +161,6 @@ if "calc" in st.session_state.results:
     st.write(f"Margin: {margin:.1f} %")
     st.write(f"Target Margin: {target_margin:.1f} %")
 
-    if margin < target_margin:
-        st.error("❌ Below Target")
-    elif margin < target_margin + 10:
-        st.warning("⚠️ Near Target")
-    else:
-        st.success("🟩 Safe Design")
-
-# =========================
-# 📊 HEATMAP
-# =========================
-if "heatmap" in st.session_state.results:
-
-    amb, fins, data = st.session_state.results["heatmap"]
-    df = pd.DataFrame(data, index=amb, columns=fins)
-
-    fig, ax = plt.subplots()
-
-    color = df.copy()
-    for i in range(len(df.index)):
-        for j in range(len(df.columns)):
-            val = df.iloc[i,j]
-            color.iloc[i,j] = 2 if val > target_margin+10 else 1 if val > target_margin else 0
-
-    ax.imshow(color, cmap=ListedColormap(["red","yellow","green"]))
-
-    ax.set_xticks(range(len(fins)))
-    ax.set_yticks(range(len(amb)))
-
-    ax.set_xticklabels([f"{f}%" for f in fins])
-    ax.set_yticklabels([f"{t}°C" for t in amb])
-
-    for i in range(len(amb)):
-        for j in range(len(fins)):
-            ax.text(j,i,f"{df.iloc[i,j]:.1f}%",ha='center')
-
-    st.pyplot(fig)
-
 # =========================
 # 🟢 OPTIMIZERS
 # =========================
@@ -192,6 +174,31 @@ if "min_fin" in st.session_state.results:
 
 if "max_Ta" in st.session_state.results:
     st.write(f"Max Ambient: {st.session_state.results['max_Ta']:.1f} °C")
+
+# =========================
+# 📄 PDF EXPORT
+# =========================
+if st.button("📄 Save Results to PDF"):
+
+    inputs = {
+        "Load": load,
+        "Motor Eff": eff_m,
+        "Controller Eff": eff_c,
+        "Ambient": Ta,
+        "Fin %": fin,
+        "Velocity": v,
+        "Target Margin": target_margin
+    }
+
+    generate_pdf(st.session_state.results, inputs)
+
+    with open("thermal_report.pdf", "rb") as f:
+        st.download_button(
+            label="Download PDF",
+            data=f,
+            file_name="thermal_report.pdf",
+            mime="application/pdf"
+        )
 
 # =========================
 # 📷 IMAGE
