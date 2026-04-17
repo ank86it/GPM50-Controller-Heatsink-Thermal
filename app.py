@@ -25,7 +25,7 @@ div[data-testid="stToolbar"] {display: none;}
 """, unsafe_allow_html=True)
 
 # ---------------- SHARE (FINAL WORKING) ----------------
-APP_URL = "https://thermal-calculator-5tieylzb3npsxk7drubm6x.streamlit.app/"
+APP_URL = "https://gpm50-controller-heatsink-thermal-fhryiay3utsj5babrbu4bb.streamlit.app/"
 
 with st.container():
     col1, col2 = st.columns([6,1])
