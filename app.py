@@ -24,8 +24,8 @@ div[data-testid="stToolbar"] {display: none;}
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- SHARE (WORKING VERSION) ----------------
-APP_URL = "https://your-app-url.streamlit.app"  # 🔁 replace this
+# ---------------- SHARE (FINAL WORKING) ----------------
+APP_URL = "https://thermal-calculator-5tieylzb3npsxk7drubm6x.streamlit.app/"
 
 with st.container():
     col1, col2 = st.columns([6,1])
@@ -36,7 +36,7 @@ with st.container():
             st.session_state["copy_link"] = True
 
     if st.session_state.get("copy_link", False):
-        st.text_input("App Link", APP_URL)
+        st.code(APP_URL)
 
 # ---------------- LOAD MODEL ----------------
 ml_model = joblib.load("xgb_thermal_model.pkl")
