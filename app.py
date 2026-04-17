@@ -10,15 +10,20 @@ import numpy as np
 st.set_page_config(page_title="Thermal Design Tool")
 
 # ---------------- HIDE STREAMLIT UI ----------------
-hide_st_style = """
+st.markdown("""
 <style>
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
 div[data-testid="stToolbar"] {display: none;}
+
+/* Centered layout */
+.block-container {
+    max-width: 900px;
+    padding-top: 2rem;
+}
 </style>
-"""
-st.markdown(hide_st_style, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # ---------------- LOAD MODEL ----------------
 ml_model = joblib.load("xgb_thermal_model.pkl")
@@ -141,6 +146,9 @@ if "heatmap" in st.session_state.results:
 
     ax.set_xticklabels([f"{f}%" for f in fins])
     ax.set_yticklabels([f"{t}°C" for t in amb])
+
+    ax.set_xlabel("Fin Area Change (%)")
+    ax.set_ylabel("Ambient Temperature (°C)")
 
     for i in range(len(amb)):
         for j in range(len(fins)):
