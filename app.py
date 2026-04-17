@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
+import matplotlib.patches as mpatches
 import joblib
 import numpy as np
 
@@ -67,7 +68,7 @@ def hybrid_predict(load, eff_m, eff_c, Ta, fin, v):
 def calc_margin(tj):
     return ((125 - tj) / 125) * 100
 
-# ---------------- HEATMAP IMAGE (FOR PDF) ----------------
+# ---------------- HEATMAP IMAGE (PDF) ----------------
 def create_heatmap_image(load, eff_m, eff_c, v, target_margin):
 
     amb = [50,40,35,30,25]
@@ -83,7 +84,7 @@ def create_heatmap_image(load, eff_m, eff_c, v, target_margin):
 
     df = pd.DataFrame(data, index=amb, columns=fins)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(5,4))
 
     color = df.copy()
     for i in range(len(df.index)):
@@ -97,10 +98,6 @@ def create_heatmap_image(load, eff_m, eff_c, v, target_margin):
     ax.set_yticks(range(len(amb)))
     ax.set_xticklabels([f"{f}%" for f in fins])
     ax.set_yticklabels([f"{t}°C" for t in amb])
-
-    for i in range(len(amb)):
-        for j in range(len(fins)):
-            ax.text(j,i,f"{df.iloc[i,j]:.1f}%",ha='center')
 
     plt.savefig("heatmap.png")
     plt.close()
@@ -117,35 +114,19 @@ def generate_pdf(results, inputs, load, eff_m, eff_c, v, target_margin):
     story.append(Paragraph("Thermal Design Report", styles['Title']))
     story.append(Spacer(1, 10))
 
-    story.append(Paragraph("Inputs:", styles['Heading2']))
     for k, v_ in inputs.items():
         story.append(Paragraph(f"{k}: {v_}", styles['Normal']))
-
-    story.append(Spacer(1, 10))
 
     if "calc" in results:
         tj, margin = results["calc"]
         story.append(Paragraph(f"Tj: {tj:.2f} °C", styles['Normal']))
         story.append(Paragraph(f"Margin: {margin:.1f} %", styles['Normal']))
 
-    story.append(Spacer(1, 10))
-    story.append(Paragraph("Optimizers:", styles['Heading2']))
-
-    if "max_load" in results:
-        story.append(Paragraph(f"Max Load: {results['max_load']:.0f} W", styles['Normal']))
-    if "min_fin" in results:
-        story.append(Paragraph(f"Min Fin: {results['min_fin']:.1f} %", styles['Normal']))
-    if "max_Ta" in results:
-        story.append(Paragraph(f"Max Ambient: {results['max_Ta']:.1f} °C", styles['Normal']))
-
-    story.append(Spacer(1, 20))
-    story.append(Paragraph("Margin Heatmap:", styles['Heading2']))
     story.append(Image("heatmap.png", width=400, height=300))
-
     doc.build(story)
 
 # =========================
-# 🔵 INPUT
+# INPUT
 # =========================
 st.title("🔥 Thermal Design Tool")
 
@@ -159,7 +140,7 @@ v = st.number_input("Air Velocity (m/s)", value=5.0)
 target_margin = st.number_input("Safety Margin Target (%)", value=10.0)
 
 # =========================
-# 🔄 UPDATE ALL
+# UPDATE
 # =========================
 if st.button("🔄 Update All Results"):
 
@@ -190,12 +171,11 @@ if st.button("🔄 Update All Results"):
 # =========================
 if "calc" in st.session_state.results:
     tj, margin = st.session_state.results["calc"]
-
     st.write(f"Tj: {tj:.2f} °C")
     st.write(f"Margin: {margin:.1f}%")
 
 # =========================
-# 📊 HEATMAP (APP)
+# HEATMAP (FIXED SIZE + LEGEND)
 # =========================
 if "calc" in st.session_state.results:
 
@@ -212,7 +192,7 @@ if "calc" in st.session_state.results:
 
     df = pd.DataFrame(data, index=amb, columns=fins)
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(5,4))
 
     color = df.copy()
     for i in range(len(df.index)):
@@ -220,24 +200,26 @@ if "calc" in st.session_state.results:
             val = df.iloc[i,j]
             color.iloc[i,j] = 2 if val > target_margin+10 else 1 if val > target_margin else 0
 
-    ax.imshow(color, cmap=ListedColormap(["red","yellow","green"]))
-
-    ax.set_xticks(range(len(fins)))
-    ax.set_yticks(range(len(amb)))
-    ax.set_xticklabels([f"{f}%" for f in fins])
-    ax.set_yticklabels([f"{t}°C" for t in amb])
+    cmap = ListedColormap(["red","yellow","green"])
+    ax.imshow(color, cmap=cmap)
 
     for i in range(len(amb)):
         for j in range(len(fins)):
-            ax.text(j,i,f"{df.iloc[i,j]:.1f}%",ha='center')
+            ax.text(j,i,f"{df.iloc[i,j]:.1f}%",ha='center', fontsize=8)
+
+    legend = [
+        mpatches.Patch(color='green', label='Over Design'),
+        mpatches.Patch(color='yellow', label='Safe Design'),
+        mpatches.Patch(color='red', label='Poor Design')
+    ]
+
+    ax.legend(handles=legend, bbox_to_anchor=(1.25,1))
 
     st.pyplot(fig)
 
 # =========================
 # OPTIMIZERS
 # =========================
-st.header(f"Optimizers (Target Margin: {target_margin:.1f}%)")
-
 if "max_load" in st.session_state.results:
     st.write(f"Max Load: {st.session_state.results['max_load']:.0f} W")
 
