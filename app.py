@@ -13,7 +13,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="GPM50 Controller Heatsink Thermal Design Tool")
 
-# ---------------- HIDE UI + SHARE BUTTON ----------------
+# ---------------- HIDE UI + SHARE ----------------
 st.markdown("""
 <style>
 #MainMenu {visibility: hidden;}
@@ -22,27 +22,36 @@ header {visibility: hidden;}
 div[data-testid="stToolbar"] {display: none;}
 .block-container {max-width: 900px;}
 
-.share-btn {
+.share-box {
     position: fixed;
     top: 10px;
     right: 20px;
     z-index: 1000;
+    display: flex;
+    gap: 6px;
 }
-.share-btn a {
+.share-btn {
     background-color: #4CAF50;
     color: white;
-    padding: 8px 14px;
-    text-decoration: none;
+    padding: 6px 10px;
     border-radius: 6px;
-    font-size: 14px;
+    cursor: pointer;
+    font-size: 13px;
+    border: none;
 }
 </style>
 
-<div class="share-btn">
-    <a href="mailto:?subject=Thermal Tool&body=Check this tool: https://your-app-url.streamlit.app">
-        🔗 Share
-    </a>
+<div class="share-box">
+    <button class="share-btn" onclick="copyLink()">🔗 Copy Link</button>
+    <a class="share-btn" href="https://wa.me/?text=Check this thermal tool: https://your-app-url.streamlit.app" target="_blank">📱 WhatsApp</a>
 </div>
+
+<script>
+function copyLink() {
+    navigator.clipboard.writeText("https://your-app-url.streamlit.app");
+    alert("Link copied!");
+}
+</script>
 """, unsafe_allow_html=True)
 
 # ---------------- LOAD MODEL ----------------
