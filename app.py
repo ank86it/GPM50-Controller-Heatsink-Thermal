@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
-import matplotlib.patches as mpatches
 import joblib
 import numpy as np
 
@@ -68,8 +67,8 @@ def hybrid_predict(load, eff_m, eff_c, Ta, fin, v):
 def calc_margin(tj):
     return ((125 - tj) / 125) * 100
 
-# ---------------- HEATMAP IMAGE ----------------
-def create_heatmap_image(load, eff_m, eff_c, v):
+# ---------------- HEATMAP IMAGE (FOR PDF) ----------------
+def create_heatmap_image(load, eff_m, eff_c, v, target_margin):
 
     amb = [50,40,35,30,25]
     fins = [-20,-10,0,10,20]
@@ -90,7 +89,7 @@ def create_heatmap_image(load, eff_m, eff_c, v):
     for i in range(len(df.index)):
         for j in range(len(df.columns)):
             val = df.iloc[i,j]
-            color.iloc[i,j] = 2 if val > 20 else 1 if val > 10 else 0
+            color.iloc[i,j] = 2 if val > target_margin+10 else 1 if val > target_margin else 0
 
     ax.imshow(color, cmap=ListedColormap(["red","yellow","green"]))
 
@@ -107,9 +106,9 @@ def create_heatmap_image(load, eff_m, eff_c, v):
     plt.close()
 
 # ---------------- PDF ----------------
-def generate_pdf(results, inputs, load, eff_m, eff_c, v):
+def generate_pdf(results, inputs, load, eff_m, eff_c, v, target_margin):
 
-    create_heatmap_image(load, eff_m, eff_c, v)
+    create_heatmap_image(load, eff_m, eff_c, v, target_margin)
 
     doc = SimpleDocTemplate("thermal_report.pdf")
     styles = getSampleStyleSheet()
@@ -196,6 +195,45 @@ if "calc" in st.session_state.results:
     st.write(f"Margin: {margin:.1f}%")
 
 # =========================
+# 📊 HEATMAP (APP)
+# =========================
+if "calc" in st.session_state.results:
+
+    amb = [50,40,35,30,25]
+    fins = [-20,-10,0,10,20]
+
+    data = []
+    for T in amb:
+        row = []
+        for f in fins:
+            tj = hybrid_predict(load, eff_m, eff_c, T, f, v)
+            row.append(calc_margin(tj))
+        data.append(row)
+
+    df = pd.DataFrame(data, index=amb, columns=fins)
+
+    fig, ax = plt.subplots()
+
+    color = df.copy()
+    for i in range(len(df.index)):
+        for j in range(len(df.columns)):
+            val = df.iloc[i,j]
+            color.iloc[i,j] = 2 if val > target_margin+10 else 1 if val > target_margin else 0
+
+    ax.imshow(color, cmap=ListedColormap(["red","yellow","green"]))
+
+    ax.set_xticks(range(len(fins)))
+    ax.set_yticks(range(len(amb)))
+    ax.set_xticklabels([f"{f}%" for f in fins])
+    ax.set_yticklabels([f"{t}°C" for t in amb])
+
+    for i in range(len(amb)):
+        for j in range(len(fins)):
+            ax.text(j,i,f"{df.iloc[i,j]:.1f}%",ha='center')
+
+    st.pyplot(fig)
+
+# =========================
 # OPTIMIZERS
 # =========================
 st.header(f"Optimizers (Target Margin: {target_margin:.1f}%)")
@@ -224,7 +262,7 @@ if st.button("📄 Save Results to PDF"):
         "Target Margin": target_margin
     }
 
-    generate_pdf(st.session_state.results, inputs, load, eff_m, eff_c, v)
+    generate_pdf(st.session_state.results, inputs, load, eff_m, eff_c, v, target_margin)
 
     with open("thermal_report.pdf", "rb") as f:
         st.download_button("Download PDF", f, "thermal_report.pdf")
