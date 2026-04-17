@@ -212,7 +212,7 @@ if "calc" in st.session_state.results:
         st.success("🟩 Safe Design (Above Target)")
 
 # =========================
-# HEATMAP (WITH DOT + ARROWS)
+# HEATMAP (SMART ARROWS)
 # =========================
 if "calc" in st.session_state.results:
 
@@ -257,17 +257,33 @@ if "calc" in st.session_state.results:
     amb_idx = min(range(len(amb)), key=lambda i: abs(amb[i] - Ta))
     ax.scatter(fin_idx, amb_idx, color='black', s=80, edgecolors='white', linewidth=1.5)
 
-    # ➡️ Arrow (increase fin)
-    if fin_idx < len(fins) - 1:
-        ax.arrow(fin_idx, amb_idx, 0.6, 0,
-                 head_width=0.2, head_length=0.2,
-                 fc='black', ec='black')
+    # SMART ARROW
+    if margin < target_margin:
 
-    # ⬇️ Arrow (reduce ambient)
-    if amb_idx < len(amb) - 1:
-        ax.arrow(fin_idx, amb_idx, 0, 0.6,
-                 head_width=0.2, head_length=0.2,
-                 fc='black', ec='black')
+        best_move = None
+        best_margin = margin
+
+        if fin_idx < len(fins) - 1:
+            m_right = df.iloc[amb_idx, fin_idx+1]
+            if m_right > best_margin:
+                best_margin = m_right
+                best_move = "right"
+
+        if amb_idx < len(amb) - 1:
+            m_down = df.iloc[amb_idx+1, fin_idx]
+            if m_down > best_margin:
+                best_margin = m_down
+                best_move = "down"
+
+        if best_move == "right":
+            ax.arrow(fin_idx, amb_idx, 0.6, 0,
+                     head_width=0.2, head_length=0.2,
+                     fc='black', ec='black')
+
+        elif best_move == "down":
+            ax.arrow(fin_idx, amb_idx, 0, 0.6,
+                     head_width=0.2, head_length=0.2,
+                     fc='black', ec='black')
 
     legend = [
         mpatches.Patch(color='green', label='Over Design'),
