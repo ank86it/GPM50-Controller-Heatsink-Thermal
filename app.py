@@ -17,7 +17,6 @@ footer {visibility: hidden;}
 header {visibility: hidden;}
 div[data-testid="stToolbar"] {display: none;}
 
-/* Centered layout */
 .block-container {
     max-width: 900px;
     padding-top: 2rem;
@@ -36,9 +35,7 @@ if "results" not in st.session_state:
 def interpolate_h(v, v_points, h_points):
     for i in range(len(v_points)-1):
         if v_points[i] <= v <= v_points[i+1]:
-            v1, v2 = v_points[i], v_points[i+1]
-            h1, h2 = h_points[i], h_points[i+1]
-            return h1 + (v - v1)*(h2 - h1)/(v2 - v1)
+            return h_points[i] + (v - v_points[i]) * (h_points[i+1] - h_points[i]) / (v_points[i+1] - v_points[i])
     return h_points[-1]
 
 def thermal_model(load, eff_m, eff_c, Ta, fin, v):
@@ -47,7 +44,6 @@ def thermal_model(load, eff_m, eff_c, Ta, fin, v):
     loss = controller_input - motor_input
 
     A_bc, A_bf = 0.0386, 0.0573
-
     h_bf = interpolate_h(v, [2,5,10], [11,18,23])
     h_bc = interpolate_h(v, [2,5,10], [13,18,21])
 
@@ -57,8 +53,7 @@ def thermal_model(load, eff_m, eff_c, Ta, fin, v):
     h = (h_bc*A_bc + h_bf*A_fin)/A_total
     R = 1/(h*A_total) + 0.064 - 0.043 - 0.17
 
-    T_case = Ta + loss*R
-    return T_case + (loss/24)*0.38
+    return Ta + loss*R + (loss/24)*0.38
 
 def hybrid_predict(load, eff_m, eff_c, Ta, fin, v):
     tj_p = thermal_model(load, eff_m, eff_c, Ta, fin, v)
@@ -68,14 +63,13 @@ def hybrid_predict(load, eff_m, eff_c, Ta, fin, v):
             v*(1+fin/100),
             1/(v*(1+fin/100)+0.1)]]
 
-    delta = ml_model.predict(inp)[0]
-    return tj_p + delta
+    return tj_p + ml_model.predict(inp)[0]
 
 def calc_margin(tj):
     return ((125 - tj) / 125) * 100
 
 # =========================
-# 🔵 SECTION 1: ANALYSIS
+# 🔵 INPUT SECTION
 # =========================
 st.title("🔥 Thermal Design Tool")
 st.header("🔵 Design Evaluation")
@@ -87,13 +81,55 @@ Ta = st.number_input("Ambient Temp (°C)", value=40.0)
 fin = st.number_input("Fin Change (%)", value=0.0)
 v = st.number_input("Air Velocity (m/s)", value=5.0)
 
-# ---------------- CALCULATE ----------------
-if st.button("Calculate"):
+# =========================
+# 🔄 UPDATE ALL BUTTON
+# =========================
+if st.button("🔄 Update All Results"):
+
+    results = {}
+
+    # ---- MAIN RESULT ----
     tj = hybrid_predict(load, eff_m, eff_c, Ta, fin, v)
     margin = calc_margin(tj)
-    st.session_state.results["calc"] = (tj, margin)
+    results["calc"] = (tj, margin)
 
-# ---------------- SHOW RESULT ----------------
+    # ---- HEATMAP ----
+    amb = [50,40,35,30,25]
+    fins = [-20,-10,0,10,20]
+    data = []
+
+    for T in amb:
+        row = []
+        for f in fins:
+            tj_temp = hybrid_predict(load, eff_m, eff_c, T, f, v)
+            row.append(calc_margin(tj_temp))
+        data.append(row)
+
+    results["heatmap"] = (amb, fins, data)
+
+    # ---- MAX LOAD ----
+    for L in np.linspace(1000,15000,120):
+        if calc_margin(hybrid_predict(L, eff_m, eff_c, Ta, fin, v)) < 10:
+            results["max_load"] = L-100
+            break
+
+    # ---- MIN FIN ----
+    for f in np.linspace(-20,50,120):
+        if calc_margin(hybrid_predict(load, eff_m, eff_c, Ta, f, v)) >= 10:
+            results["min_fin"] = f
+            break
+
+    # ---- MAX AMBIENT ----
+    for T in np.linspace(20,80,120):
+        if calc_margin(hybrid_predict(load, eff_m, eff_c, T, fin, v)) < 10:
+            results["max_Ta"] = T-0.5
+            break
+
+    st.session_state.results = results
+
+# =========================
+# 🔵 DISPLAY RESULTS
+# =========================
 if "calc" in st.session_state.results:
     tj, margin = st.session_state.results["calc"]
 
@@ -108,23 +144,9 @@ if "calc" in st.session_state.results:
     else:
         st.success("🟩 Over Design")
 
-# ---------------- HEATMAP ----------------
-if st.button("Show Margin Map"):
-
-    amb = [50,40,35,30,25]
-    fins = [-20,-10,0,10,20]
-
-    data = []
-    for T in amb:
-        row = []
-        for f in fins:
-            tj = hybrid_predict(load, eff_m, eff_c, T, f, v)
-            row.append(calc_margin(tj))
-        data.append(row)
-
-    st.session_state.results["heatmap"] = (amb, fins, data)
-
-# ---------------- SHOW HEATMAP ----------------
+# =========================
+# 📊 HEATMAP
+# =========================
 if "heatmap" in st.session_state.results:
 
     amb, fins, data = st.session_state.results["heatmap"]
@@ -138,65 +160,28 @@ if "heatmap" in st.session_state.results:
             val = df.iloc[i,j]
             color.iloc[i,j] = 2 if val>20 else 1 if val>10 else 0
 
-    cmap = ListedColormap(["red","yellow","green"])
-    ax.imshow(color, cmap=cmap)
-
+    ax.imshow(color, cmap=ListedColormap(["red","yellow","green"]))
     ax.set_xticks(range(len(fins)))
     ax.set_yticks(range(len(amb)))
-
     ax.set_xticklabels([f"{f}%" for f in fins])
     ax.set_yticklabels([f"{t}°C" for t in amb])
-
-    ax.set_xlabel("Fin Area Change (%)")
-    ax.set_ylabel("Ambient Temperature (°C)")
 
     for i in range(len(amb)):
         for j in range(len(fins)):
             ax.text(j,i,f"{df.iloc[i,j]:.1f}%",ha='center')
 
-    legend = [
-        mpatches.Patch(color='green', label='Over Design'),
-        mpatches.Patch(color='yellow', label='Safe Design'),
-        mpatches.Patch(color='red', label='Poor Design')
-    ]
-
-    ax.legend(handles=legend, bbox_to_anchor=(1.4,1))
     st.pyplot(fig)
 
 # =========================
-# 🟢 SECTION 2: OPTIMIZERS
+# 🟢 OPTIMIZER RESULTS
 # =========================
-st.header("🟢 Design Optimizers (10% Margin Target)")
-
-# MAX LOAD
-if st.button("Find Max Load"):
-    for L in np.linspace(1000,15000,120):
-        tj = hybrid_predict(L, eff_m, eff_c, Ta, fin, v)
-        if calc_margin(tj) < 10:
-            st.session_state.results["max_load"] = L-100
-            break
+st.header("🟢 Design Optimizers")
 
 if "max_load" in st.session_state.results:
     st.write(f"Max Load: {st.session_state.results['max_load']:.0f} W")
 
-# MIN FIN
-if st.button("Find Minimum Fin"):
-    for f in np.linspace(-20,50,120):
-        tj = hybrid_predict(load, eff_m, eff_c, Ta, f, v)
-        if calc_margin(tj) >= 10:
-            st.session_state.results["min_fin"] = f
-            break
-
 if "min_fin" in st.session_state.results:
     st.write(f"Minimum Fin: {st.session_state.results['min_fin']:.1f} %")
-
-# MAX AMBIENT
-if st.button("Find Max Ambient Temperature"):
-    for T in np.linspace(20,80,120):
-        tj = hybrid_predict(load, eff_m, eff_c, T, fin, v)
-        if calc_margin(tj) < 10:
-            st.session_state.results["max_Ta"] = T-0.5
-            break
 
 if "max_Ta" in st.session_state.results:
     st.write(f"Max Ambient: {st.session_state.results['max_Ta']:.1f} °C")
