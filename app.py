@@ -9,6 +9,10 @@ import numpy as np
 # ---------------- LOAD MODEL ----------------
 ml_model = joblib.load("xgb_thermal_model.pkl")
 
+# ---------------- SESSION STATE INIT ----------------
+if "results" not in st.session_state:
+    st.session_state.results = {}
+
 # ---------------- PHYSICS ----------------
 def interpolate_h(v, v_points, h_points):
     for i in range(len(v_points)-1):
@@ -65,10 +69,16 @@ Ta = st.number_input("Ambient Temp (°C)", value=40.0)
 fin = st.number_input("Fin Change (%)", value=0.0)
 v = st.number_input("Air Velocity (m/s)", value=5.0)
 
+# ---------------- CALCULATE ----------------
 if st.button("Calculate"):
-
     tj = hybrid_predict(load, eff_m, eff_c, Ta, fin, v)
     margin = calc_margin(tj)
+
+    st.session_state.results["calc"] = (tj, margin)
+
+# ---------------- SHOW RESULT ----------------
+if "calc" in st.session_state.results:
+    tj, margin = st.session_state.results["calc"]
 
     st.subheader("Results")
     st.write(f"Tj: {tj:.2f} °C")
@@ -95,6 +105,12 @@ if st.button("Show Margin Map"):
             row.append(calc_margin(tj))
         data.append(row)
 
+    st.session_state.results["heatmap"] = (amb, fins, data)
+
+# ---------------- SHOW HEATMAP ----------------
+if "heatmap" in st.session_state.results:
+
+    amb, fins, data = st.session_state.results["heatmap"]
     df = pd.DataFrame(data, index=amb, columns=fins)
 
     fig, ax = plt.subplots()
@@ -114,75 +130,52 @@ if st.button("Show Margin Map"):
     ax.set_xticklabels([f"{f}%" for f in fins])
     ax.set_yticklabels([f"{t}°C" for t in amb])
 
-    ax.set_xlabel("Fin Area Change (%)")
-    ax.set_ylabel("Ambient Temperature (°C)")
-
     for i in range(len(amb)):
         for j in range(len(fins)):
             ax.text(j,i,f"{df.iloc[i,j]:.1f}%",ha='center')
 
-    legend = [
-        mpatches.Patch(color='green', label='Over Design'),
-        mpatches.Patch(color='yellow', label='Safe Design'),
-        mpatches.Patch(color='red', label='Poor Design')
-    ]
-
-    ax.legend(handles=legend, bbox_to_anchor=(1.4,1))
     st.pyplot(fig)
 
 # =========================
 # 🟢 SECTION 2: OPTIMIZERS
 # =========================
-st.header("🟢 Design Optimizers (10% Margin Target)")
+st.header("🟢 Design Optimizers")
 
-# 1️⃣ MAX LOAD
+# MAX LOAD
 if st.button("Find Max Load"):
-    max_load = None
-
-    for L in np.linspace(1000, 15000, 120):
+    for L in np.linspace(1000,15000,120):
         tj = hybrid_predict(L, eff_m, eff_c, Ta, fin, v)
-
-        if calc_margin(tj) >= 10:
-            max_load = L
-        else:
+        if calc_margin(tj) < 10:
+            st.session_state.results["max_load"] = L-100
             break
 
-    st.write(f"Max Load Allowed: {max_load:.0f} W")
+if "max_load" in st.session_state.results:
+    st.write(f"Max Load: {st.session_state.results['max_load']:.0f} W")
 
-# 2️⃣ MIN FIN
-if st.button("Find Minimum Fin"):
-    best_fin = None
-
-    for f in np.linspace(-20, 50, 120):
+# MIN FIN
+if st.button("Find Min Fin"):
+    for f in np.linspace(-20,50,120):
         tj = hybrid_predict(load, eff_m, eff_c, Ta, f, v)
-
         if calc_margin(tj) >= 10:
-            best_fin = f
+            st.session_state.results["min_fin"] = f
             break
 
-    st.write(f"Minimum Fin Required: {best_fin:.1f} %")
+if "min_fin" in st.session_state.results:
+    st.write(f"Minimum Fin: {st.session_state.results['min_fin']:.1f} %")
 
-# 3️⃣ MAX AMBIENT
-if st.button("Find Max Ambient Temperature"):
-    max_Ta = None
-
-    for T in np.linspace(20, 80, 120):
+# MAX AMBIENT
+if st.button("Find Max Ambient"):
+    for T in np.linspace(20,80,120):
         tj = hybrid_predict(load, eff_m, eff_c, T, fin, v)
-
-        if calc_margin(tj) >= 10:
-            max_Ta = T
-        else:
+        if calc_margin(tj) < 10:
+            st.session_state.results["max_Ta"] = T-0.5
             break
 
-    st.write(f"Max Ambient Temperature: {max_Ta:.1f} °C")
+if "max_Ta" in st.session_state.results:
+    st.write(f"Max Ambient: {st.session_state.results['max_Ta']:.1f} °C")
 
 # =========================
-# 📷 IMAGE SECTION
+# 📷 IMAGE
 # =========================
 st.markdown("---")
-st.subheader("📷 Controller Heatsink Design")
-
-try:
-    st.image("Controller Heatsink2.png", use_container_width=True)
-except:
-    st.warning("Image not found. Check file name.")
+st.image("Controller Heatsink2.png", use_container_width=True)
