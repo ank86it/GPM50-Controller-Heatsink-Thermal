@@ -95,11 +95,6 @@ def create_heatmap_image(load, eff_m, eff_c, v, target_margin):
     cmap = ListedColormap(["red","yellow","green"])
     ax.imshow(color, cmap=cmap)
 
-    ax.set_xticks(range(len(fins)))
-    ax.set_yticks(range(len(amb)))
-    ax.set_xticklabels([f"{f}%" for f in fins])
-    ax.set_yticklabels([f"{t}°C" for t in amb])
-
     for i in range(len(amb)):
         for j in range(len(fins)):
             ax.text(j,i,f"{df.iloc[i,j]:.1f}%",ha='center', fontsize=8)
@@ -120,7 +115,6 @@ def generate_pdf(results, inputs, load, eff_m, eff_c, v, target_margin):
     story.append(Spacer(1, 15))
 
     story.append(Paragraph("Inputs:", styles['Heading2']))
-    story.append(Spacer(1, 5))
     for k, v_ in inputs.items():
         story.append(Paragraph(f"{k}: {v_}", styles['Normal']))
 
@@ -129,15 +123,12 @@ def generate_pdf(results, inputs, load, eff_m, eff_c, v, target_margin):
     if "calc" in results:
         tj, margin = results["calc"]
         story.append(Paragraph("Results:", styles['Heading2']))
-        story.append(Spacer(1, 5))
         story.append(Paragraph(f"Tj: {tj:.2f} °C", styles['Normal']))
         story.append(Paragraph(f"Margin: {margin:.1f} %", styles['Normal']))
 
     story.append(Spacer(1, 10))
 
     story.append(Paragraph("Optimizers:", styles['Heading2']))
-    story.append(Spacer(1, 5))
-
     if "max_load" in results:
         story.append(Paragraph(f"Max Load: {results['max_load']:.0f} W", styles['Normal']))
     if "min_fin" in results:
@@ -148,11 +139,9 @@ def generate_pdf(results, inputs, load, eff_m, eff_c, v, target_margin):
     story.append(Spacer(1, 15))
 
     story.append(Paragraph("Margin Heatmap:", styles['Heading2']))
-    story.append(Spacer(1, 10))
     story.append(Image("heatmap.png", width=400, height=300))
 
     story.append(Spacer(1, 10))
-
     story.append(Paragraph("Legend:", styles['Heading3']))
     story.append(Paragraph("🟩 Over Design (> target + 10%)", styles['Normal']))
     story.append(Paragraph("🟨 Safe Design (> target margin)", styles['Normal']))
@@ -182,7 +171,8 @@ if st.button("🔄 Update All Results"):
     res = {}
 
     tj = hybrid_predict(load, eff_m, eff_c, Ta, fin, v)
-    res["calc"] = (tj, calc_margin(tj))
+    margin = calc_margin(tj)
+    res["calc"] = (tj, margin)
 
     for L in np.linspace(1000,15000,120):
         if calc_margin(hybrid_predict(L, eff_m, eff_c, Ta, fin, v)) < target_margin:
@@ -206,8 +196,17 @@ if st.button("🔄 Update All Results"):
 # =========================
 if "calc" in st.session_state.results:
     tj, margin = st.session_state.results["calc"]
+
     st.write(f"Tj: {tj:.2f} °C")
     st.write(f"Margin: {margin:.1f}%")
+
+    # STATUS
+    if margin < target_margin:
+        st.error("❌ Below Target Margin")
+    elif margin < target_margin + 10:
+        st.warning("⚠️ Near Target (Safe but not robust)")
+    else:
+        st.success("🟩 Safe Design (Above Target)")
 
 # =========================
 # HEATMAP
@@ -255,6 +254,8 @@ if "calc" in st.session_state.results:
 # =========================
 # OPTIMIZERS
 # =========================
+st.header(f"🟢 Design Optimizers (Target Margin: {target_margin:.1f}%)")
+
 if "max_load" in st.session_state.results:
     st.write(f"Max Load: {st.session_state.results['max_load']:.0f} W")
 
