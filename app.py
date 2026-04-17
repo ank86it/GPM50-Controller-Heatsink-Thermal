@@ -11,7 +11,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet
 
 # ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="Thermal Design Tool")
+st.set_page_config(page_title="GPM50 Controller Heatsink Thermal Design Tool")
 
 # ---------------- HIDE UI ----------------
 st.markdown("""
@@ -116,11 +116,9 @@ def generate_pdf(results, inputs, load, eff_m, eff_c, v, target_margin):
     styles = getSampleStyleSheet()
     story = []
 
-    # TITLE
     story.append(Paragraph("Thermal Design Report", styles['Title']))
     story.append(Spacer(1, 15))
 
-    # INPUTS
     story.append(Paragraph("Inputs:", styles['Heading2']))
     story.append(Spacer(1, 5))
     for k, v_ in inputs.items():
@@ -128,7 +126,6 @@ def generate_pdf(results, inputs, load, eff_m, eff_c, v, target_margin):
 
     story.append(Spacer(1, 10))
 
-    # RESULTS
     if "calc" in results:
         tj, margin = results["calc"]
         story.append(Paragraph("Results:", styles['Heading2']))
@@ -138,7 +135,6 @@ def generate_pdf(results, inputs, load, eff_m, eff_c, v, target_margin):
 
     story.append(Spacer(1, 10))
 
-    # OPTIMIZERS
     story.append(Paragraph("Optimizers:", styles['Heading2']))
     story.append(Spacer(1, 5))
 
@@ -151,16 +147,13 @@ def generate_pdf(results, inputs, load, eff_m, eff_c, v, target_margin):
 
     story.append(Spacer(1, 15))
 
-    # HEATMAP
     story.append(Paragraph("Margin Heatmap:", styles['Heading2']))
     story.append(Spacer(1, 10))
     story.append(Image("heatmap.png", width=400, height=300))
 
     story.append(Spacer(1, 10))
 
-    # LEGEND
     story.append(Paragraph("Legend:", styles['Heading3']))
-    story.append(Spacer(1, 5))
     story.append(Paragraph("🟩 Over Design (> target + 10%)", styles['Normal']))
     story.append(Paragraph("🟨 Safe Design (> target margin)", styles['Normal']))
     story.append(Paragraph("🟥 Poor Design (< target margin)", styles['Normal']))
@@ -170,7 +163,7 @@ def generate_pdf(results, inputs, load, eff_m, eff_c, v, target_margin):
 # =========================
 # INPUT
 # =========================
-st.title("🔥 Thermal Design Tool")
+st.title("🔥 GPM50 Controller Heatsink Thermal Design Tool")
 
 load = st.number_input("Load (W)", value=6000.0)
 eff_m = st.number_input("Motor Efficiency", value=0.9000, format="%.4f")
@@ -217,7 +210,7 @@ if "calc" in st.session_state.results:
     st.write(f"Margin: {margin:.1f}%")
 
 # =========================
-# HEATMAP (FIXED)
+# HEATMAP
 # =========================
 if "calc" in st.session_state.results:
 
